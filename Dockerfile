@@ -1,8 +1,8 @@
 pipeline {
     agent any
     environment {
-        DOCKER_USERNAME = credentials('docker_username') // Jenkins credentials ID
-        DOCKER_PASSWORD = credentials('docker-password') // Jenkins credentials ID
+        DOCKER_USERNAME = credentials('jagritikamboj9') // Jenkins credentials ID
+        DOCKER_PASSWORD = credentials('A895060#yz') // Jenkins credentials ID
     }
     stages {
         stage('Checkout') {
