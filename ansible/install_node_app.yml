@@ -1,0 +1,96 @@
+---
+- name: Setup and deploy Node.js React app on worker node
+  hosts: worker   # 🔹 make sure this matches your inventory
+  become: yes
+
+  vars:
+    app_dir: /var/www/react-app
+    repo_url: https://github.com/Jagriti143/Portfolio_website.git   # 🔹 change this to your actual repo
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install dependencies for Node.js
+      apt:
+        name:
+          - curl
+          - git
+        state: present
+
+    - name: Add Node.js 20.x repository
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Install Node.js and npm
+      apt:
+        name:
+          - nodejs
+        state: present
+
+    - name: Check Node.js version
+      command: node -v
+      register: node_version
+
+    - debug:
+        msg: "Node.js version is {{ node_version.stdout }}"
+
+    - name: Ensure app directory exists
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Clone or update the project repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+
+    - name: Install npm dependencies
+      npm:
+        path: "{{ app_dir }}"
+        production: false
+
+    - name: Build the React app
+      shell: npm run build
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Create systemd service for React app
+      copy:
+        dest: /etc/systemd/system/react-app.service
+        content: |
+          [Unit]
+          Description=React Node App
+          After=network.target
+
+          [Service]
+          WorkingDirectory={{ app_dir }}
+          ExecStart=/usr/bin/npm run preview
+          Restart=always
+          User=ubuntu
+          Environment=NODE_ENV=production
+          StandardOutput=syslog
+          StandardError=syslog
+          SyslogIdentifier=react-app
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start React app service
+      systemd:
+        name: react-app
+        enabled: yes
+        state: started
+

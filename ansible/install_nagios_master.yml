@@ -1,0 +1,83 @@
+---
+- name: Install and configure Nagios Core on master (localhost)
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required dependencies
+      apt:
+        name:
+          - apache2
+          - php
+          - libapache2-mod-php
+          - gcc
+          - make
+          - libgd-dev
+          - unzip
+          - wget
+          - build-essential
+          - libssl-dev        # Required for SSL headers
+          - daemon
+          - sendmail
+        state: present
+
+    - name: Download Nagios Core source
+      get_url:
+        url: https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.4.14.tar.gz
+        dest: /tmp/nagios.tar.gz
+
+    - name: Extract Nagios source
+      unarchive:
+        src: /tmp/nagios.tar.gz
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Compile and install Nagios
+      shell: |
+        cd /tmp/nagios-4.4.14
+        ./configure --with-httpd-conf=/etc/apache2/sites-enabled
+        make all
+        make install-groups-users
+        usermod -a -G nagios www-data
+        make install
+        make install-daemoninit
+        make install-commandmode
+        make install-config
+        make install-webconf
+      args:
+        chdir: /tmp/nagios-4.4.14
+        creates: /usr/local/nagios/bin/nagios
+
+    - name: Create Nagios admin user
+      shell: htpasswd -bc /usr/local/nagios/etc/htpasswd.users nagiosadmin nagios123
+      args:
+        creates: /usr/local/nagios/etc/htpasswd.users
+
+    - name: Enable Apache rewrite and CGI modules
+      command: a2enmod {{ item }}
+      loop:
+        - rewrite
+        - cgi
+      notify:
+        - Restart Apache
+
+    - name: Enable and start Apache and Nagios services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - apache2
+        - nagios
+
+  handlers:
+    - name: Restart Apache
+      systemd:
+        name: apache2
+        state: restarted
+
